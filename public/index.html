@@ -232,7 +232,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-        import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDoc, getDocs, doc, setDoc, updateDoc, deleteDoc, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCuG9n9dbp47_ZGoMsvp-Z8JtsNVZpNR3Y",
@@ -258,6 +258,13 @@
         let calendarInstance = null;
         let activeMode = 'timer';
 
+        // Window focus event listener to refresh Firebase auth token and prevent idle state bugs
+        window.addEventListener('focus', () => {
+            if (auth.currentUser) {
+                auth.currentUser.getIdToken(true).catch(err => console.error("Token refresh error:", err));
+            }
+        });
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 currentUser = {
@@ -273,6 +280,40 @@
 
                 updateUIForRole();
                 await fetchEntriesFromCloud();
+
+                // Check Firestore for any active timer running across browser sessions/reboots
+                try {
+                    const userRef = doc(db, "users", currentUser.id);
+                    const docSnap = await getDoc(userRef);
+                    if (docSnap.exists() && docSnap.data().timerRunning && docSnap.data().timerStartTime) {
+                        const data = docSnap.data();
+                        currentStartTime = data.timerStartTime;
+                        const startTimeObj = new Date(currentStartTime);
+                        const now = new Date();
+                        timerSeconds = Math.floor((now - startTimeObj) / 1000);
+                        if (timerSeconds < 0) timerSeconds = 0;
+                        isRunning = true;
+
+                        const startBtn = document.getElementById('start-btn');
+                        startBtn.textContent = 'STOP';
+                        startBtn.style.backgroundColor = 'var(--danger)';
+                        if (data.taskDescription) {
+                            document.getElementById('task-input').value = data.taskDescription;
+                        }
+                        if (data.project) document.getElementById('project-input').value = data.project;
+                        if (data.client) document.getElementById('client-input').value = data.client;
+                        if (data.tags) document.getElementById('tags-input').value = data.tags;
+                        if (data.ratePerHour) document.getElementById('rate-input').value = data.ratePerHour;
+
+                        timerInterval = setInterval(() => {
+                            timerSeconds++;
+                            document.getElementById('timer').textContent = formatSeconds(timerSeconds);
+                        }, 1000);
+                    }
+                } catch (e) {
+                    console.error("Error reading active timer state:", e);
+                }
+
             } else {
                 currentUser = null;
                 document.getElementById('login-overlay').classList.remove('hidden');
@@ -364,9 +405,26 @@
                 if (!taskInput.value.trim()) return alert('Please enter a task description.');
                 isRunning = true;
                 currentStartTime = new Date().toISOString();
+                timerSeconds = 0;
                 startBtn.textContent = 'STOP';
                 startBtn.style.backgroundColor = 'var(--danger)';
                 
+                // Save active timer state to Firestore user profile for cross-device/browser persistence
+                try {
+                    const userRef = doc(db, "users", currentUser.id);
+                    await setDoc(userRef, {
+                        timerRunning: true,
+                        timerStartTime: currentStartTime,
+                        taskDescription: taskInput.value.trim(),
+                        project: projectInput.value.trim() || 'General',
+                        client: clientInput.value.trim() || 'N/A',
+                        tags: tagsInput.value.trim() || '',
+                        ratePerHour: parseFloat(rateInput.value) || 0
+                    }, { merge: true });
+                } catch (e) {
+                    console.error("Error saving timer state to cloud:", e);
+                }
+
                 timerInterval = setInterval(() => {
                     timerSeconds++;
                     document.getElementById('timer').textContent = formatSeconds(timerSeconds);
@@ -400,6 +458,17 @@
 
                 try {
                     await addDoc(collection(db, "timeLogs"), newEntry);
+                    
+                    // Clear timer running state from Firestore user profile
+                    await updateDoc(doc(db, "users", currentUser.id), {
+                        timerRunning: false,
+                        timerStartTime: null,
+                        taskDescription: "",
+                        project: "",
+                        client: "",
+                        tags: ""
+                    });
+
                     timerSeconds = 0;
                     currentStartTime = null;
                     document.getElementById('timer').textContent = '00:00:00';
@@ -537,6 +606,7 @@
                     <td>$${(entry.ratePerHour || 0).toFixed(2)}</td>
                     <td>$${entry.totalCost || '0.00'}</td>
                     <td>
+                        <button class="action-btn btn-secondary" onclick="window.editEntry('${entry.id}')">Edit</button>
                         <button class="action-btn btn-danger" onclick="window.deleteEntry('${entry.id}')">Delete</button>
                     </td>
                 `;
@@ -547,7 +617,62 @@
             updateCalendarEvents();
         }
 
+        // Edit Entry Feature available for users (owners) and admins
+        window.editEntry = async function(id) {
+            const entry = cloudEntries.find(e => e.id === id);
+            if (!entry) return;
+
+            if (currentUser.role !== 'Admin' && entry.userId !== currentUser.id) {
+                alert("You do not have permission to edit this entry.");
+                return;
+            }
+
+            const newDesc = prompt("Edit Description:", entry.description);
+            if (newDesc === null) return;
+
+            const newProject = prompt("Edit Project:", entry.project);
+            if (newProject === null) return;
+
+            const newClient = prompt("Edit Client:", entry.client || '');
+            if (newClient === null) return;
+
+            const newTags = prompt("Edit Tags:", entry.tags || '');
+            if (newTags === null) return;
+
+            const newRate = prompt("Edit Rate/Hr ($):", entry.ratePerHour || 20);
+            if (newRate === null) return;
+
+            const rateNum = parseFloat(newRate) || 0;
+            const hours = entry.seconds / 3600;
+            const totalCost = (hours * rateNum).toFixed(2);
+
+            try {
+                const entryRef = doc(db, "timeLogs", id);
+                await updateDoc(entryRef, {
+                    description: newDesc,
+                    project: newProject,
+                    client: newClient,
+                    tags: newTags,
+                    ratePerHour: rateNum,
+                    totalCost: totalCost
+                });
+
+                await fetchEntriesFromCloud();
+                alert('Entry updated successfully!');
+            } catch (error) {
+                alert("Error updating entry: " + error.message);
+            }
+        };
+
         window.deleteEntry = async function(id) {
+            const entry = cloudEntries.find(e => e.id === id);
+            if (!entry) return;
+
+            if (currentUser.role !== 'Admin' && entry.userId !== currentUser.id) {
+                alert("You do not have permission to delete this entry.");
+                return;
+            }
+
             if (confirm("Delete this cloud entry?")) {
                 try {
                     await deleteDoc(doc(db, "timeLogs", id));
