@@ -59,7 +59,6 @@
 
         .container { padding: 30px; max-width: 1200px; width: 100%; margin: 0 auto; }
         .tracker-bar { background: #ffffff; padding: 15px 20px; border-radius: 4px; border: 1px solid var(--border-color); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); margin-bottom: 25px; }
-        .tracker-bar input[type="text"], .tracker-bar input[type="number"], .tracker-bar input[type="date"], .tracker-bar input[type="time"] { font-size: 14px; }
         .timer-display { font-size: 20px; font-weight: bold; font-family: monospace; min-width: 90px; }
 
         .filter-bar { background: #ffffff; padding: 15px 20px; border-radius: 4px; border: 1px solid var(--border-color); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 25px; }
@@ -216,12 +215,7 @@
                                 <th>User UID</th>
                             </tr>
                         </thead>
-                        <tbody id="user-list">
-                            <tr>
-                                <td>admin@santuza-tracker.com</td>
-                                <td>Configured Admin Account</td>
-                            </tr>
-                        </tbody>
+                        <tbody id="user-list"></tbody>
                     </table>
                 </div>
             </div>
@@ -258,7 +252,6 @@
         let calendarInstance = null;
         let activeMode = 'timer';
 
-        // Window focus event listener to refresh Firebase auth token and prevent idle state bugs
         window.addEventListener('focus', () => {
             if (auth.currentUser) {
                 auth.currentUser.getIdToken(true).catch(err => console.error("Token refresh error:", err));
@@ -281,7 +274,6 @@
                 updateUIForRole();
                 await fetchEntriesFromCloud();
 
-                // Check Firestore for any active timer running across browser sessions/reboots
                 try {
                     const userRef = doc(db, "users", currentUser.id);
                     const docSnap = await getDoc(userRef);
@@ -297,9 +289,7 @@
                         const startBtn = document.getElementById('start-btn');
                         startBtn.textContent = 'STOP';
                         startBtn.style.backgroundColor = 'var(--danger)';
-                        if (data.taskDescription) {
-                            document.getElementById('task-input').value = data.taskDescription;
-                        }
+                        if (data.taskDescription) document.getElementById('task-input').value = data.taskDescription;
                         if (data.project) document.getElementById('project-input').value = data.project;
                         if (data.client) document.getElementById('client-input').value = data.client;
                         if (data.tags) document.getElementById('tags-input').value = data.tags;
@@ -409,7 +399,6 @@
                 startBtn.textContent = 'STOP';
                 startBtn.style.backgroundColor = 'var(--danger)';
                 
-                // Save active timer state to Firestore user profile for cross-device/browser persistence
                 try {
                     const userRef = doc(db, "users", currentUser.id);
                     await setDoc(userRef, {
@@ -458,8 +447,6 @@
 
                 try {
                     await addDoc(collection(db, "timeLogs"), newEntry);
-                    
-                    // Clear timer running state from Firestore user profile
                     await updateDoc(doc(db, "users", currentUser.id), {
                         timerRunning: false,
                         timerStartTime: null,
@@ -617,7 +604,6 @@
             updateCalendarEvents();
         }
 
-        // Edit Entry Feature available for users (owners) and admins
         window.editEntry = async function(id) {
             const entry = cloudEntries.find(e => e.id === id);
             if (!entry) return;
