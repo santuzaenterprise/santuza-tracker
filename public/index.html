@@ -56,6 +56,8 @@
         button.btn-secondary:hover { background-color: #3f51b5; }
         button.btn-danger { background-color: var(--danger); }
         button.btn-danger:hover { background-color: var(--danger-dark); }
+        button.btn-success { background-color: var(--success); }
+        button.btn-success:hover { background-color: #388e3c; }
 
         .container { padding: 30px; max-width: 1200px; width: 100%; margin: 0 auto; }
         .tracker-bar { background: #ffffff; padding: 15px 20px; border-radius: 4px; border: 1px solid var(--border-color); display: flex; flex-wrap: wrap; align-items: center; gap: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); margin-bottom: 25px; }
@@ -74,6 +76,7 @@
         th { background-color: #f9fbfd; color: var(--text-muted); font-weight: 600; }
 
         .action-btn { padding: 4px 8px; font-size: 11px; margin-right: 3px; }
+        .inline-input { width: 100%; padding: 4px 6px; font-size: 12px; }
         .hidden { display: none !important; }
         #calendar { min-height: 600px; }
     </style>
@@ -251,6 +254,7 @@
         let doughnutChartInstance = null;
         let calendarInstance = null;
         let activeMode = 'timer';
+        let editingRowId = null; // Track which row is currently being edited inline
 
         window.addEventListener('focus', () => {
             if (auth.currentUser) {
@@ -576,27 +580,55 @@
             const filtered = getFilteredEntries();
 
             filtered.forEach(entry => {
-                const timeRange = entry.startTime && entry.endTime 
-                    ? `${new Date(entry.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(entry.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    : 'N/A';
-
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${entry.date}</td>
-                    <td>${entry.email || entry.userName || 'User'}</td>
-                    <td>${entry.description}</td>
-                    <td>${entry.project}</td>
-                    <td>${entry.client || 'N/A'}</td>
-                    <td>${entry.tags || '-'}</td>
-                    <td>${timeRange}</td>
-                    <td>${entry.duration}</td>
-                    <td>$${(entry.ratePerHour || 0).toFixed(2)}</td>
-                    <td>$${entry.totalCost || '0.00'}</td>
-                    <td>
-                        <button class="action-btn btn-secondary" onclick="window.editEntry('${entry.id}')">Edit</button>
-                        <button class="action-btn btn-danger" onclick="window.deleteEntry('${entry.id}')">Delete</button>
-                    </td>
-                `;
+                
+                if (editingRowId === entry.id) {
+                    // Inline editing mode inputs
+                    const existingStartTime = entry.startTime ? new Date(entry.startTime).toTimeString().substring(0, 5) : "09:00";
+                    const existingEndTime = entry.endTime ? new Date(entry.endTime).toTimeString().substring(0, 5) : "10:00";
+
+                    tr.innerHTML = `
+                        <td><input type="date" id="edit-date-${entry.id}" value="${entry.date || new Date().toISOString().split('T')[0]}" class="inline-input"></td>
+                        <td>${entry.email || entry.userName || 'User'}</td>
+                        <td><input type="text" id="edit-desc-${entry.id}" value="${entry.description || ''}" class="inline-input"></td>
+                        <td><input type="text" id="edit-proj-${entry.id}" value="${entry.project || ''}" class="inline-input"></td>
+                        <td><input type="text" id="edit-client-${entry.id}" value="${entry.client || ''}" class="inline-input"></td>
+                        <td><input type="text" id="edit-tags-${entry.id}" value="${entry.tags || ''}" class="inline-input"></td>
+                        <td>
+                            <input type="time" id="edit-start-${entry.id}" value="${existingStartTime}" class="inline-input" style="width: 75px;"><br>
+                            <input type="time" id="edit-end-${entry.id}" value="${existingEndTime}" class="inline-input" style="width: 75px; margin-top:2px;">
+                        </td>
+                        <td>-</td>
+                        <td><input type="number" id="edit-rate-${entry.id}" value="${entry.ratePerHour || 20}" class="inline-input" style="width: 60px;" min="0"></td>
+                        <td>-</td>
+                        <td>
+                            <button class="action-btn btn-success" onclick="window.saveInlineEdit('${entry.id}')">Save</button>
+                            <button class="action-btn btn-danger" onclick="window.cancelInlineEdit()">Cancel</button>
+                        </td>
+                    `;
+                } else {
+                    // Normal display mode
+                    const timeRange = entry.startTime && entry.endTime 
+                        ? `${new Date(entry.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(entry.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                        : 'N/A';
+
+                    tr.innerHTML = `
+                        <td>${entry.date}</td>
+                        <td>${entry.email || entry.userName || 'User'}</td>
+                        <td>${entry.description}</td>
+                        <td>${entry.project}</td>
+                        <td>${entry.client || 'N/A'}</td>
+                        <td>${entry.tags || '-'}</td>
+                        <td>${timeRange}</td>
+                        <td>${entry.duration}</td>
+                        <td>$${(entry.ratePerHour || 0).toFixed(2)}</td>
+                        <td>$${entry.totalCost || '0.00'}</td>
+                        <td>
+                            <button class="action-btn btn-secondary" onclick="window.startInlineEdit('${entry.id}')">Edit</button>
+                            <button class="action-btn btn-danger" onclick="window.deleteEntry('${entry.id}')">Delete</button>
+                        </td>
+                    `;
+                }
                 tbody.appendChild(tr);
             });
 
@@ -604,7 +636,7 @@
             updateCalendarEvents();
         }
 
-        window.editEntry = async function(id) {
+        window.startInlineEdit = function(id) {
             const entry = cloudEntries.find(e => e.id === id);
             if (!entry) return;
 
@@ -613,72 +645,61 @@
                 return;
             }
 
-            const newDesc = prompt("Edit Description:", entry.description);
-            if (newDesc === null) return;
+            editingRowId = id;
+            renderEntries();
+        };
 
-            const newProject = prompt("Edit Project:", entry.project);
-            if (newProject === null) return;
+        window.cancelInlineEdit = function() {
+            editingRowId = null;
+            renderEntries();
+        };
 
-            const newClient = prompt("Edit Client:", entry.client || '');
-            if (newClient === null) return;
+        window.saveInlineEdit = async function(id) {
+            const entry = cloudEntries.find(e => e.id === id);
+            if (!entry) return;
 
-            const newTags = prompt("Edit Tags:", entry.tags || '');
-            if (newTags === null) return;
+            const newDate = document.getElementById(`edit-date-${id}`).value;
+            const newDesc = document.getElementById(`edit-desc-${id}`).value.trim();
+            const newProject = document.getElementById(`edit-proj-${id}`).value.trim();
+            const newClient = document.getElementById(`edit-client-${id}`).value.trim();
+            const newTags = document.getElementById(`edit-tags-${id}`).value.trim();
+            const newStart = document.getElementById(`edit-start-${id}`).value;
+            const newEnd = document.getElementById(`edit-end-${id}`).value;
+            const newRate = parseFloat(document.getElementById(`edit-rate-${id}`).value) || 0;
 
-            // Pre-fill existing date/times if available
-            const existingDate = entry.date || new Date().toISOString().split('T')[0];
-            let existingStartTime = "09:00";
-            let existingEndTime = "10:00";
+            if (!newDesc) return alert('Description cannot be empty.');
+            if (!newDate || !newStart || !newEnd) return alert('Date, start time, and end time are required.');
 
-            if (entry.startTime && entry.endTime) {
-                existingStartTime = new Date(entry.startTime).toTimeString().substring(0, 5);
-                existingEndTime = new Date(entry.endTime).toTimeString().substring(0, 5);
-            }
-
-            const newDate = prompt("Edit Date (YYYY-MM-DD):", existingDate);
-            if (newDate === null) return;
-
-            const newStart = prompt("Edit Start Time (HH:MM in 24hr format, e.g., 09:00):", existingStartTime);
-            if (newStart === null) return;
-
-            const newEnd = prompt("Edit End Time (HH:MM in 24hr format, e.g., 17:30):", existingEndTime);
-            if (newEnd === null) return;
-
-            const newRate = prompt("Edit Rate/Hr ($):", entry.ratePerHour || 20);
-            if (newRate === null) return;
-
-            // Calculate new duration and times
             const startObj = new Date(`${newDate}T${newStart}`);
             const endObj = new Date(`${newDate}T${newEnd}`);
 
             if (endObj <= startObj) {
-                alert('End time must be later than start time. Edit cancelled.');
+                alert('End time must be later than start time.');
                 return;
             }
 
             const durationSec = Math.floor((endObj - startObj) / 1000);
             const hours = durationSec / 3600;
-            const rateNum = parseFloat(newRate) || 0;
-            const totalCost = (hours * rateNum).toFixed(2);
+            const totalCost = (hours * newRate).toFixed(2);
 
             try {
                 const entryRef = doc(db, "timeLogs", id);
                 await updateDoc(entryRef, {
                     description: newDesc,
-                    project: newProject,
-                    client: newClient,
+                    project: newProject || 'General',
+                    client: newClient || 'N/A',
                     tags: newTags,
                     date: newDate,
                     startTime: startObj.toISOString(),
                     endTime: endObj.toISOString(),
                     duration: formatSeconds(durationSec),
                     seconds: durationSec,
-                    ratePerHour: rateNum,
+                    ratePerHour: newRate,
                     totalCost: totalCost
                 });
 
+                editingRowId = null;
                 await fetchEntriesFromCloud();
-                alert('Entry and time frame updated successfully!');
             } catch (error) {
                 alert("Error updating entry: " + error.message);
             }
