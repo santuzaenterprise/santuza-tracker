@@ -625,11 +625,40 @@
             const newTags = prompt("Edit Tags:", entry.tags || '');
             if (newTags === null) return;
 
+            // Pre-fill existing date/times if available
+            const existingDate = entry.date || new Date().toISOString().split('T')[0];
+            let existingStartTime = "09:00";
+            let existingEndTime = "10:00";
+
+            if (entry.startTime && entry.endTime) {
+                existingStartTime = new Date(entry.startTime).toTimeString().substring(0, 5);
+                existingEndTime = new Date(entry.endTime).toTimeString().substring(0, 5);
+            }
+
+            const newDate = prompt("Edit Date (YYYY-MM-DD):", existingDate);
+            if (newDate === null) return;
+
+            const newStart = prompt("Edit Start Time (HH:MM in 24hr format, e.g., 09:00):", existingStartTime);
+            if (newStart === null) return;
+
+            const newEnd = prompt("Edit End Time (HH:MM in 24hr format, e.g., 17:30):", existingEndTime);
+            if (newEnd === null) return;
+
             const newRate = prompt("Edit Rate/Hr ($):", entry.ratePerHour || 20);
             if (newRate === null) return;
 
+            // Calculate new duration and times
+            const startObj = new Date(`${newDate}T${newStart}`);
+            const endObj = new Date(`${newDate}T${newEnd}`);
+
+            if (endObj <= startObj) {
+                alert('End time must be later than start time. Edit cancelled.');
+                return;
+            }
+
+            const durationSec = Math.floor((endObj - startObj) / 1000);
+            const hours = durationSec / 3600;
             const rateNum = parseFloat(newRate) || 0;
-            const hours = entry.seconds / 3600;
             const totalCost = (hours * rateNum).toFixed(2);
 
             try {
@@ -639,12 +668,17 @@
                     project: newProject,
                     client: newClient,
                     tags: newTags,
+                    date: newDate,
+                    startTime: startObj.toISOString(),
+                    endTime: endObj.toISOString(),
+                    duration: formatSeconds(durationSec),
+                    seconds: durationSec,
                     ratePerHour: rateNum,
                     totalCost: totalCost
                 });
 
                 await fetchEntriesFromCloud();
-                alert('Entry updated successfully!');
+                alert('Entry and time frame updated successfully!');
             } catch (error) {
                 alert("Error updating entry: " + error.message);
             }
