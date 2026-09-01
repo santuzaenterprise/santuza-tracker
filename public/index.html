@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Santuza - Time Tracker (Local Test Version)</title>
+    <title>Santuza - Time Tracker (Cloud Version)</title>
     <!-- Chart.js & FullCalendar -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+    
     <style>
         :root {
             --primary: #03a9f4;
@@ -73,9 +74,6 @@
         th, td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); font-size: 13px; }
         th { background-color: #f9fbfd; color: var(--text-muted); font-weight: 600; }
 
-        .badge { padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
-        .badge-admin { background: #e8eaf6; color: #3f51b5; }
-        .badge-user { background: #e0f2f1; color: #00897b; }
         .action-btn { padding: 4px 8px; font-size: 11px; margin-right: 3px; }
         .hidden { display: none !important; }
         #calendar { min-height: 600px; }
@@ -87,16 +85,11 @@
     <div id="login-overlay">
         <div class="login-card">
             <h2>⏱️ Santuza Login</h2>
-            <p style="font-size: 12px; color: var(--text-muted); text-align: center;">Select user or type credentials below:</p>
+            <p style="font-size: 12px; color: var(--text-muted); text-align: center;">Enter your Firebase credentials:</p>
             
-            <select id="quick-user-select" onchange="autofillLogin()">
-                <!-- Populated dynamically -->
-            </select>
-
             <input type="email" id="auth-email" placeholder="Email Address">
-            <input type="password" id="auth-password" placeholder="Password" value="123456">
-            <button onclick="loginUser()">Sign In</button>
-            <button class="btn-secondary" onclick="resetAppStorage()">Force Reset Local Storage</button>
+            <input type="password" id="auth-password" placeholder="Password">
+            <button id="sign-in-btn">Sign In</button>
             <p id="auth-error" style="color: var(--danger); font-size: 13px; text-align: center;" class="hidden"></p>
         </div>
     </div>
@@ -105,9 +98,9 @@
     <aside>
         <div class="brand">⏱️ Santuza</div>
         <ul class="nav-links">
-            <li id="nav-tracker" class="active"><a onclick="switchTab('tracker')">Time Tracker</a></li>
-            <li id="nav-calendar"><a onclick="switchTab('calendar')">Calendar View</a></li>
-            <li id="nav-users" class="hidden"><a onclick="switchTab('users')">User Management</a></li>
+            <li id="nav-tracker" class="active"><a id="link-tracker">Time Tracker</a></li>
+            <li id="nav-calendar"><a id="link-calendar">Calendar View</a></li>
+            <li id="nav-users" class="hidden"><a id="link-users">User Management</a></li>
         </ul>
     </aside>
 
@@ -117,7 +110,7 @@
                 <span id="welcome-msg">Logged in as: ...</span>
             </div>
             <div>
-                <button class="btn-danger" onclick="logoutUser()">Sign Out</button>
+                <button class="btn-danger" id="sign-out-btn">Sign Out</button>
             </div>
         </header>
 
@@ -125,8 +118,8 @@
             <!-- Mode Toggle Bar -->
             <div style="margin-bottom: 10px; display: flex; gap: 10px; align-items: center;">
                 <span style="font-weight: bold; font-size: 14px;">Tracking Mode:</span>
-                <button id="mode-timer-btn" class="btn-secondary" onclick="setTrackingMode('timer')">Live Timer</button>
-                <button id="mode-manual-btn" style="background-color: #ccc; color: #333;" onclick="setTrackingMode('manual')">Manual Entry</button>
+                <button id="mode-timer-btn" class="btn-secondary">Live Timer</button>
+                <button id="mode-manual-btn" style="background-color: #ccc; color: #333;">Manual Entry</button>
             </div>
 
             <!-- Timer / Manual Entry Bar -->
@@ -140,7 +133,7 @@
                 <!-- Timer Controls -->
                 <div id="live-timer-controls" style="display: flex; align-items: center; gap: 10px;">
                     <div class="timer-display" id="timer">00:00:00</div>
-                    <button id="start-btn" onclick="toggleTimer()">START</button>
+                    <button id="start-btn">START</button>
                 </div>
 
                 <!-- Manual Entry Controls -->
@@ -148,7 +141,7 @@
                     <input type="date" id="manual-date">
                     <input type="time" id="manual-start">
                     <input type="time" id="manual-end">
-                    <button onclick="addManualEntry()">ADD ENTRY</button>
+                    <button id="add-manual-btn">ADD ENTRY</button>
                 </div>
             </div>
 
@@ -157,17 +150,17 @@
                 <!-- Reporting Filters Bar -->
                 <div class="filter-bar">
                     <span style="font-weight: bold; font-size: 14px;">🔍 Filters:</span>
-                    <input type="date" id="filter-start-date" onchange="renderEntries()">
+                    <input type="date" id="filter-start-date">
                     <span>to</span>
-                    <input type="date" id="filter-end-date" onchange="renderEntries()">
-                    <input type="text" id="filter-client" placeholder="Filter by Client" oninput="renderEntries()" style="width: 130px;">
-                    <input type="text" id="filter-tag" placeholder="Filter by Tag" oninput="renderEntries()" style="width: 120px;">
-                    <button class="btn-secondary" onclick="clearFilters()">Clear Filters</button>
+                    <input type="date" id="filter-end-date">
+                    <input type="text" id="filter-client" placeholder="Filter by Client" style="width: 130px;">
+                    <input type="text" id="filter-tag" placeholder="Filter by Tag" style="width: 120px;">
+                    <button class="btn-secondary" id="clear-filters-btn">Clear Filters</button>
                 </div>
 
                 <div class="analytics-grid">
                     <div class="chart-card">
-                        <h3>7-Day Tracked Time Overview (Hours)</h3>
+                        <h3>Tracked Time Overview (Hours)</h3>
                         <div class="chart-container"><canvas id="timeBarChart"></canvas></div>
                     </div>
                     <div class="chart-card">
@@ -180,8 +173,8 @@
                     <div class="card-header">
                         <h3>Time Entries</h3>
                         <div>
-                            <button onclick="exportCSV()" class="btn-secondary">Export Filtered CSV</button>
-                            <button onclick="exportXLS()" class="btn-secondary">Export Filtered XLS</button>
+                            <button id="export-csv-btn" class="btn-secondary">Export Filtered CSV</button>
+                            <button id="export-xls-btn" class="btn-secondary">Export Filtered XLS</button>
                         </div>
                     </div>
                     <table>
@@ -215,60 +208,47 @@
                 <div class="card">
                     <div class="card-header">
                         <h3>Team Management (Admin View)</h3>
-                        <button class="btn-secondary" onclick="showAddUserModal()">+ Add New User</button>
                     </div>
                     <table>
                         <thead>
                             <tr>
-                                <th>Name</th>
                                 <th>Email</th>
-                                <th>Role</th>
-                                <th>Actions</th>
+                                <th>User UID</th>
                             </tr>
                         </thead>
-                        <tbody id="user-list"></tbody>
+                        <tbody id="user-list">
+                            <tr>
+                                <td>admin@santuza-tracker.com</td>
+                                <td>Configured Admin Account</td>
+                            </tr>
+                        </tbody>
                     </table>
                 </div>
             </div>
         </div>
     </main>
 
-    <script>
-        const defaultUsers = [
-            { id: "1", name: "Admin User", email: "admin@test.com", password: "123456", role: "Admin" },
-            { id: "2", name: "Standard User", email: "user@test.com", password: "123456", role: "User" }
-        ];
+    <!-- Firebase SDK Modular Scripts -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+        import { getFirestore, collection, addDoc, getDocs, doc, deleteDoc, orderBy, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-        function loadUsers() {
-            try {
-                const raw = localStorage.getItem('santuza_users');
-                if (!raw) {
-                    localStorage.setItem('santuza_users', JSON.stringify(defaultUsers));
-                    return [...defaultUsers];
-                }
-                const parsed = JSON.parse(raw);
-                return (Array.isArray(parsed) && parsed.length > 0) ? parsed : [...defaultUsers];
-            } catch (e) {
-                localStorage.setItem('santuza_users', JSON.stringify(defaultUsers));
-                return [...defaultUsers];
-            }
-        }
+        const firebaseConfig = {
+            apiKey: "AIzaSyCuG9n9dbp47_ZGoMsvp-Z8JtsNVZpNR3Y",
+            authDomain: "santuza-tracker-a238f.firebaseapp.com",
+            projectId: "santuza-tracker-a238f",
+            storageBucket: "santuza-tracker-a238f.firebasestorage.app",
+            messagingSenderId: "584572930003",
+            appId: "1:584572930003:web:781ecc7642f859bfa3d126"
+        };
 
-        function loadEntries() {
-            try {
-                const raw = localStorage.getItem('santuza_entries');
-                if (!raw) return [];
-                const parsed = JSON.parse(raw);
-                return Array.isArray(parsed) ? parsed : [];
-            } catch (e) {
-                return [];
-            }
-        }
-
-        let mockUsers = loadUsers();
-        let localEntries = loadEntries();
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
         let currentUser = null;
+        let cloudEntries = [];
         let timerInterval = null;
         let timerSeconds = 0;
         let isRunning = false;
@@ -278,92 +258,44 @@
         let calendarInstance = null;
         let activeMode = 'timer';
 
-        function saveUsersToStorage() {
-            localStorage.setItem('santuza_users', JSON.stringify(mockUsers));
-        }
-
-        function saveEntriesToStorage() {
-            localStorage.setItem('santuza_entries', JSON.stringify(localEntries));
-        }
-
-        function resetAppStorage() {
-            localStorage.clear();
-            mockUsers = [...defaultUsers];
-            localEntries = [];
-            saveUsersToStorage();
-            populateUserDropdown();
-            autofillLogin();
-            alert("Local Storage reset successfully!");
-        }
-
-        function populateUserDropdown() {
-            const dropdown = document.getElementById('quick-user-select');
-            dropdown.innerHTML = '';
-
-            mockUsers.forEach(u => {
-                const opt = document.createElement('option');
-                opt.value = u.email;
-                opt.textContent = `${u.name} (${u.email})`;
-                dropdown.appendChild(opt);
-            });
-
-            if (mockUsers.length > 0) {
-                document.getElementById('auth-email').value = mockUsers[0].email;
-            }
-        }
-
-        function autofillLogin() {
-            const selected = document.getElementById('quick-user-select').value;
-            document.getElementById('auth-email').value = selected || "admin@test.com";
-            document.getElementById('auth-password').value = "123456";
-        }
-
-        function loginUser() {
-            const emailInput = document.getElementById('auth-email').value;
-            const passwordInput = document.getElementById('auth-password').value;
-            const errEl = document.getElementById('auth-error');
-
-            const cleanEmail = emailInput ? emailInput.trim().toLowerCase() : "";
-            const cleanPassword = passwordInput ? passwordInput.trim() : "";
-
-            if (!cleanEmail) {
-                errEl.textContent = "Please enter an email address.";
-                errEl.classList.remove('hidden');
-                return;
-            }
-
-            const user = mockUsers.find(u => 
-                u && u.email && u.email.trim().toLowerCase() === cleanEmail && 
-                u.password && u.password.trim() === cleanPassword
-            );
-
+        onAuthStateChanged(auth, async (user) => {
             if (user) {
-                currentUser = user;
-                errEl.classList.add('hidden');
-                document.getElementById('login-overlay').classList.add('hidden');
-                document.getElementById('welcome-msg').textContent = `Logged in as: ${user.name} (${user.role})`;
+                currentUser = {
+                    id: user.uid,
+                    email: user.email,
+                    name: user.email.split('@')[0],
+                    role: user.email.toLowerCase().includes('admin') ? 'Admin' : 'User'
+                };
                 
-                // Default date pickers
+                document.getElementById('login-overlay').classList.add('hidden');
+                document.getElementById('welcome-msg').textContent = `Logged in as: ${currentUser.email} (${currentUser.role})`;
                 document.getElementById('manual-date').value = new Date().toISOString().split('T')[0];
 
                 updateUIForRole();
-                renderEntries();
-                renderCharts();
-                updateCalendarEvents();
-                if (user.role === 'Admin') loadAdminUserList();
+                await fetchEntriesFromCloud();
             } else {
-                errEl.textContent = "Invalid email or password. Click 'Force Reset Local Storage' if needed.";
+                currentUser = null;
+                document.getElementById('login-overlay').classList.remove('hidden');
+            }
+        });
+
+        document.getElementById('sign-in-btn').addEventListener('click', async () => {
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value.trim();
+            const errEl = document.getElementById('auth-error');
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                errEl.classList.add('hidden');
+            } catch (error) {
+                errEl.textContent = error.message;
                 errEl.classList.remove('hidden');
             }
-        }
+        });
 
-        function logoutUser() {
-            currentUser = null;
-            switchTab('tracker');
-            populateUserDropdown();
-            autofillLogin();
-            document.getElementById('login-overlay').classList.remove('hidden');
-        }
+        document.getElementById('sign-out-btn').addEventListener('click', () => {
+            signOut(auth);
+        });
 
         function updateUIForRole() {
             const navUsers = document.getElementById('nav-users');
@@ -375,8 +307,23 @@
             }
         }
 
-        // MODE SWITCHING (TIMER VS MANUAL)
-        function setTrackingMode(mode) {
+        async function fetchEntriesFromCloud() {
+            try {
+                const q = query(collection(db, "timeLogs"), orderBy("timestamp", "desc"));
+                const snapshot = await getDocs(q);
+                cloudEntries = [];
+                snapshot.forEach(docSnap => {
+                    cloudEntries.push({ id: docSnap.id, ...docSnap.data() });
+                });
+                renderEntries();
+                renderCharts();
+                updateCalendarEvents();
+            } catch (error) {
+                console.error("Error fetching logs: ", error);
+            }
+        }
+
+        window.setTrackingMode = function(mode) {
             activeMode = mode;
             const timerBtn = document.getElementById('mode-timer-btn');
             const manualBtn = document.getElementById('mode-manual-btn');
@@ -400,10 +347,12 @@
                 timerControls.classList.add('hidden');
                 manualControls.classList.remove('hidden');
             }
-        }
+        };
 
-        // TIMER LOGIC
-        function toggleTimer() {
+        document.getElementById('mode-timer-btn').addEventListener('click', () => setTrackingMode('timer'));
+        document.getElementById('mode-manual-btn').addEventListener('click', () => setTrackingMode('manual'));
+
+        document.getElementById('start-btn').addEventListener('click', async () => {
             const startBtn = document.getElementById('start-btn');
             const taskInput = document.getElementById('task-input');
             const projectInput = document.getElementById('project-input');
@@ -432,9 +381,9 @@
                 const totalCost = (hours * rate).toFixed(2);
 
                 const newEntry = {
-                    id: Date.now().toString(),
                     userId: currentUser.id,
                     userName: currentUser.name,
+                    email: currentUser.email,
                     description: taskInput.value || 'No Description',
                     project: projectInput.value || 'General',
                     client: clientInput.value || 'N/A',
@@ -445,30 +394,30 @@
                     totalCost: totalCost,
                     date: new Date().toISOString().split('T')[0],
                     startTime: currentStartTime,
-                    endTime: endTimeISO
+                    endTime: endTimeISO,
+                    timestamp: serverTimestamp()
                 };
 
-                localEntries.push(newEntry);
-                saveEntriesToStorage();
+                try {
+                    await addDoc(collection(db, "timeLogs"), newEntry);
+                    timerSeconds = 0;
+                    currentStartTime = null;
+                    document.getElementById('timer').textContent = '00:00:00';
+                    taskInput.value = '';
+                    projectInput.value = '';
+                    clientInput.value = '';
+                    tagsInput.value = '';
+                    startBtn.textContent = 'START';
+                    startBtn.style.backgroundColor = 'var(--primary)';
 
-                timerSeconds = 0;
-                currentStartTime = null;
-                document.getElementById('timer').textContent = '00:00:00';
-                taskInput.value = '';
-                projectInput.value = '';
-                clientInput.value = '';
-                tagsInput.value = '';
-                startBtn.textContent = 'START';
-                startBtn.style.backgroundColor = 'var(--primary)';
-
-                renderEntries();
-                renderCharts();
-                updateCalendarEvents();
+                    await fetchEntriesFromCloud();
+                } catch (error) {
+                    alert("Error saving log to cloud: " + error.message);
+                }
             }
-        }
+        });
 
-        // MANUAL ENTRY LOGIC
-        function addManualEntry() {
+        document.getElementById('add-manual-btn').addEventListener('click', async () => {
             const taskInput = document.getElementById('task-input').value.trim();
             const projectInput = document.getElementById('project-input').value.trim();
             const clientInput = document.getElementById('client-input').value.trim();
@@ -492,9 +441,9 @@
             const totalCost = (hours * rateInput).toFixed(2);
 
             const newEntry = {
-                id: Date.now().toString(),
                 userId: currentUser.id,
                 userName: currentUser.name,
+                email: currentUser.email,
                 description: taskInput,
                 project: projectInput || 'General',
                 client: clientInput || 'N/A',
@@ -505,63 +454,23 @@
                 totalCost: totalCost,
                 date: dateVal,
                 startTime: startObj.toISOString(),
-                endTime: endObj.toISOString()
+                endTime: endObj.toISOString(),
+                timestamp: serverTimestamp()
             };
 
-            localEntries.push(newEntry);
-            saveEntriesToStorage();
+            try {
+                await addDoc(collection(db, "timeLogs"), newEntry);
+                document.getElementById('task-input').value = '';
+                document.getElementById('project-input').value = '';
+                document.getElementById('client-input').value = '';
+                document.getElementById('tags-input').value = '';
 
-            document.getElementById('task-input').value = '';
-            document.getElementById('project-input').value = '';
-            document.getElementById('client-input').value = '';
-            document.getElementById('tags-input').value = '';
-
-            renderEntries();
-            renderCharts();
-            updateCalendarEvents();
-            alert('Manual entry added successfully!');
-        }
-
-        // EDIT ENTRY LOGIC
-        function editEntry(id) {
-            const entry = localEntries.find(e => e.id === id);
-            if (!entry) return;
-
-            const newDesc = prompt("Edit Description:", entry.description);
-            if (newDesc === null) return;
-
-            const newProject = prompt("Edit Project:", entry.project);
-            if (newProject === null) return;
-
-            const newClient = prompt("Edit Client:", entry.client || "");
-            if (newClient === null) return;
-
-            const newTags = prompt("Edit Tags:", entry.tags || "");
-            if (newTags === null) return;
-
-            const newHours = prompt("Edit Duration (in total minutes):", Math.round(entry.seconds / 60));
-            if (newHours === null) return;
-
-            const newRate = prompt("Edit Rate per Hour ($):", entry.ratePerHour || 0);
-            if (newRate === null) return;
-
-            const sec = parseInt(newHours) * 60;
-            const rate = parseFloat(newRate) || 0;
-
-            entry.description = newDesc.trim() || entry.description;
-            entry.project = newProject.trim() || entry.project;
-            entry.client = newClient.trim() || entry.client;
-            entry.tags = newTags.trim() || entry.tags;
-            entry.seconds = sec;
-            entry.duration = formatSeconds(sec);
-            entry.ratePerHour = rate;
-            entry.totalCost = ((sec / 3600) * rate).toFixed(2);
-
-            saveEntriesToStorage();
-            renderEntries();
-            renderCharts();
-            updateCalendarEvents();
-        }
+                await fetchEntriesFromCloud();
+                alert('Manual entry successfully saved to cloud!');
+            } catch (error) {
+                alert("Error saving manual entry: " + error.message);
+            }
+        });
 
         function formatSeconds(sec) {
             const hrs = Math.floor(sec / 3600).toString().padStart(2, '0');
@@ -570,35 +479,27 @@
             return `${hrs}:${mins}:${secs}`;
         }
 
-        // FILTER LOGIC
         function getFilteredEntries() {
             if (!currentUser) return [];
 
             let filtered = currentUser.role === 'Admin' 
-                ? [...localEntries] 
-                : localEntries.filter(e => e.userId === currentUser.id);
+                ? [...cloudEntries] 
+                : cloudEntries.filter(e => e.userId === currentUser.id);
 
             const startDate = document.getElementById('filter-start-date').value;
             const endDate = document.getElementById('filter-end-date').value;
             const clientFilter = document.getElementById('filter-client').value.trim().toLowerCase();
             const tagFilter = document.getElementById('filter-tag').value.trim().toLowerCase();
 
-            if (startDate) {
-                filtered = filtered.filter(e => e.date >= startDate);
-            }
-            if (endDate) {
-                filtered = filtered.filter(e => e.date <= endDate);
-            }
-            if (clientFilter) {
-                filtered = filtered.filter(e => (e.client || '').toLowerCase().includes(clientFilter));
-            }
-            if (tagFilter) {
-                filtered = filtered.filter(e => (e.tags || '').toLowerCase().includes(tagFilter));
-            }
+            if (startDate) filtered = filtered.filter(e => e.date >= startDate);
+            if (endDate) filtered = filtered.filter(e => e.date <= endDate);
+            if (clientFilter) filtered = filtered.filter(e => (e.client || '').toLowerCase().includes(clientFilter));
+            if (tagFilter) filtered = filtered.filter(e => (e.tags || '').toLowerCase().includes(tagFilter));
 
             return filtered;
         }
 
+        document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
         function clearFilters() {
             document.getElementById('filter-start-date').value = '';
             document.getElementById('filter-end-date').value = '';
@@ -606,6 +507,11 @@
             document.getElementById('filter-tag').value = '';
             renderEntries();
         }
+
+        document.getElementById('filter-start-date').addEventListener('change', renderEntries);
+        document.getElementById('filter-end-date').addEventListener('change', renderEntries);
+        document.getElementById('filter-client').addEventListener('input', renderEntries);
+        document.getElementById('filter-tag').addEventListener('input', renderEntries);
 
         function renderEntries() {
             const tbody = document.getElementById('entries-list');
@@ -621,7 +527,7 @@
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${entry.date}</td>
-                    <td>${entry.userName || 'User'}</td>
+                    <td>${entry.email || entry.userName || 'User'}</td>
                     <td>${entry.description}</td>
                     <td>${entry.project}</td>
                     <td>${entry.client || 'N/A'}</td>
@@ -631,8 +537,7 @@
                     <td>$${(entry.ratePerHour || 0).toFixed(2)}</td>
                     <td>$${entry.totalCost || '0.00'}</td>
                     <td>
-                        <button class="action-btn btn-secondary" onclick="editEntry('${entry.id}')">Edit</button>
-                        <button class="action-btn btn-danger" onclick="deleteEntry('${entry.id}')">Delete</button>
+                        <button class="action-btn btn-danger" onclick="window.deleteEntry('${entry.id}')">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -642,43 +547,46 @@
             updateCalendarEvents();
         }
 
-        function deleteEntry(id) {
-            if (confirm("Delete this entry?")) {
-                localEntries = localEntries.filter(e => e.id !== id);
-                saveEntriesToStorage();
-                renderEntries();
+        window.deleteEntry = async function(id) {
+            if (confirm("Delete this cloud entry?")) {
+                try {
+                    await deleteDoc(doc(db, "timeLogs", id));
+                    await fetchEntriesFromCloud();
+                } catch (error) {
+                    alert("Error deleting entry: " + error.message);
+                }
             }
-        }
+        };
 
-        // EXPORT FILTERED DATA
+        document.getElementById('export-csv-btn').addEventListener('click', exportCSV);
         function exportCSV() {
             const filtered = getFilteredEntries();
             if (!filtered.length) return alert('No data to export');
-            const headers = "Date,User,Description,Project,Client,Tags,Duration,Rate_Per_Hr,Total_Cost\n";
-            const rows = filtered.map(e => `"${e.date}","${e.userName}","${e.description}","${e.project}","${e.client || ''}","${e.tags || ''}","${e.duration}","${e.ratePerHour || 0}","${e.totalCost || 0}"`).join("\n");
+            const headers = "Date,Email,Description,Project,Client,Tags,Duration,Rate_Per_Hr,Total_Cost\n";
+            const rows = filtered.map(e => `"${e.date}","${e.email || e.userName}","${e.description}","${e.project}","${e.client || ''}","${e.tags || ''}","${e.duration}","${e.ratePerHour || 0}","${e.totalCost || 0}"`).join("\n");
             const blob = new Blob([headers + rows], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.setAttribute('href', url);
-            a.setAttribute('download', 'Filtered_Time_Report.csv');
+            a.setAttribute('download', 'Santuza_Cloud_Time_Report.csv');
             a.click();
         }
 
+        document.getElementById('export-xls-btn').addEventListener('click', exportXLS);
         function exportXLS() {
             const filtered = getFilteredEntries();
             if (!filtered.length) return alert('No data to export');
-            let tableHTML = "<table><tr><th>Date</th><th>User</th><th>Description</th><th>Project</th><th>Client</th><th>Tags</th><th>Duration</th><th>Rate/Hr</th><th>Total Cost</th></tr>";
+            let tableHTML = "<table><tr><th>Date</th><th>Email</th><th>Description</th><th>Project</th><th>Client</th><th>Tags</th><th>Duration</th><th>Rate/Hr</th><th>Total Cost</th></tr>";
             filtered.forEach(e => {
-                tableHTML += `<tr><td>${e.date}</td><td>${e.userName}</td><td>${e.description}</td><td>${e.project}</td><td>${e.client || ''}</td><td>${e.tags || ''}</td><td>${e.duration}</td><td>$${e.ratePerHour || 0}</td><td>$${e.totalCost || 0}</td></tr>`;
+                tableHTML += `<tr><td>${e.date}</td><td>${e.email || e.userName}</td><td>${e.description}</td><td>${e.project}</td><td>${e.client || ''}</td><td>${e.tags || ''}</td><td>${e.duration}</td><td>$${e.ratePerHour || 0}</td><td>$${e.totalCost || 0}</td></tr>`;
             });
             tableHTML += "</table>";
             const link = document.createElement("a");
             link.href = `data:application/vnd.ms-excel, ${encodeURIComponent(tableHTML)}`;
-            link.download = `Filtered_Time_Report.xls`;
+            link.download = `Santuza_Cloud_Time_Report.xls`;
             link.click();
         }
 
-        // CHARTS & CALENDAR
         function renderCharts() {
             const projectTotals = {};
             const filtered = getFilteredEntries();
@@ -690,8 +598,8 @@
             barChartInstance = new Chart(barCtx, {
                 type: 'bar',
                 data: {
-                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                    datasets: [{ label: 'Hours', data: [2, 4, 3, 5, 2, 0, 1], backgroundColor: '#03a9f4' }]
+                    labels: Object.keys(projectTotals).length ? Object.keys(projectTotals) : ['General'],
+                    datasets: [{ label: 'Hours', data: Object.values(projectTotals).length ? Object.values(projectTotals) : [0], backgroundColor: '#03a9f4' }]
                 },
                 options: { responsive: true, maintainAspectRatio: false }
             });
@@ -726,7 +634,7 @@
             })));
         }
 
-        function switchTab(tab) {
+        window.switchTab = function(tab) {
             document.getElementById('nav-tracker').classList.toggle('active', tab === 'tracker');
             document.getElementById('nav-calendar').classList.toggle('active', tab === 'calendar');
             document.getElementById('nav-users').classList.toggle('active', tab === 'users');
@@ -736,72 +644,11 @@
             document.getElementById('users-view').classList.toggle('hidden', tab !== 'users');
 
             if (tab === 'calendar' && calendarInstance) setTimeout(() => calendarInstance.render(), 100);
-        }
-
-        // ADMIN USER MANAGEMENT
-        function loadAdminUserList() {
-            const tbody = document.getElementById('user-list');
-            tbody.innerHTML = '';
-            mockUsers.forEach((u, index) => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${u.name}</td>
-                    <td>${u.email}</td>
-                    <td><span class="badge ${u.role === 'Admin' ? 'badge-admin' : 'badge-user'}">${u.role}</span></td>
-                    <td>
-                        <button class="action-btn btn-secondary" onclick="adminResetPassword('${u.email}')">Reset Password</button>
-                        <button class="action-btn btn-danger" onclick="deleteUser(${index})">Delete</button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        function showAddUserModal() {
-            const name = prompt("Enter User Name:");
-            if (!name) return;
-            
-            const email = prompt("Enter User Email:");
-            if (!email) return;
-            
-            const role = confirm("Should this user be an Admin? Click OK for Admin, Cancel for Standard User.") ? "Admin" : "User";
-
-            const newUser = {
-                id: Date.now().toString(),
-                name: name,
-                email: email.trim(),
-                password: "123456",
-                role: role
-            };
-
-            mockUsers.push(newUser);
-            saveUsersToStorage();
-            populateUserDropdown();
-            alert(`User ${name} added successfully! Password: 123456`);
-            loadAdminUserList();
-        }
-
-        function deleteUser(index) {
-            const targetUser = mockUsers[index];
-            if (currentUser && currentUser.email === targetUser.email) {
-                return alert("You cannot delete your active logged-in account!");
-            }
-            if (confirm(`Are you sure you want to delete ${targetUser.name}?`)) {
-                mockUsers.splice(index, 1);
-                saveUsersToStorage();
-                populateUserDropdown();
-                loadAdminUserList();
-            }
-        }
-
-        function adminResetPassword(email) {
-            alert(`[SIMULATION] Password reset email sent to ${email}`);
-        }
-
-        window.onload = function() {
-            populateUserDropdown();
-            autofillLogin();
         };
+
+        document.getElementById('link-tracker').addEventListener('click', () => switchTab('tracker'));
+        document.getElementById('link-calendar').addEventListener('click', () => switchTab('calendar'));
+        document.getElementById('link-users').addEventListener('click', () => switchTab('users'));
     </script>
 </body>
 </html>
